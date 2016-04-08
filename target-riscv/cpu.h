@@ -261,7 +261,7 @@ struct CPURISCVState {
     uint32_t current_tc;
     uint32_t SEGBITS;
     uint32_t PABITS;
-
+    target_ulong operand_shadow[2];
     uint64_t csr[4096]; // RISCV CSR registers
 
     /* QEMU */

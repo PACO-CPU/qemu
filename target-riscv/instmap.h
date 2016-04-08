@@ -32,6 +32,7 @@ enum {
     OPC_RISC_ARITH      = (0x33),
     OPC_RISC_FENCE      = (0x0F),
     OPC_RISC_SYSTEM     = (0x73),
+    OPC_RISC_APPROX     = (0x0b),
 
     /* rv64i, rv64m */
     OPC_RISC_ARITH_IMM_W = (0x1B),
@@ -303,9 +304,16 @@ enum {
     OPC_RISC_FMV_D_X   = OPC_RISC_FP_ARITH | (0x79 << 25),
 };
 
+#define MASK_OP_APPROX(op) (((op & 0x7000) >> 12) | ((op & 0x2000000) >> 25))
+enum {
+    OPC_PACO_ADD_APPROX = 0x0,
+    OPC_PACO_SUB_APPROX = 0x1,
+    OPC_PACO_MUL_APPROX = 0x2,
+};
+
 #define GET_B_IMM(inst)              ((int16_t)((((inst >> 25) & 0x3F) << 5) | ((((int32_t)inst) >> 31) << 12) | (((inst >> 8) & 0xF) << 1) | (((inst >> 7) & 0x1) << 11)))  /* THIS BUILDS 13 bit imm (implicit zero is tacked on here), also note that bit #12 is obtained in a special way to get sign extension */
 #define GET_STORE_IMM(inst)           ((int16_t)(((((int32_t)inst) >> 25) << 5) | ((inst >> 7) & 0x1F)))
 #define GET_JAL_IMM(inst)             ((int32_t)((inst & 0xFF000) | (((inst >> 20) & 0x1) << 11) | (((inst >> 21) & 0x3FF) << 1) | ((((int32_t)inst) >> 31) << 20)))
 #define GET_RM(inst)                  ((inst >> 12) & 0x7)
 #define GET_RS3(inst)                 ((inst >> 27) & 0x1F)
-
+#define GET_APPROX_BITS(inst)         ((inst >> 26) & 0x3f)
