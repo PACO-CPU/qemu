@@ -169,14 +169,25 @@ static void gen_approx(DisasContext *ctx, uint32_t opc,
                        int rd, int rs1, int rs2, uint16_t approxbits)
 {
     TCGv source1, source2;
+    TCGv *local_shadow1, *local_shadow2;
     int lsb_negl;
 
     source1 = tcg_temp_new();
     source2 = tcg_temp_new();
 
-    gen_get_gpr(source1, rs1);
-    gen_get_gpr(source2, rs2);
-
+    if (opc < 3) {/* opc of all int insn is 0,1 and 2 */
+        gen_get_gpr(source1, rs1);
+        gen_get_gpr(source2, rs2);
+        /* use int shadow reg */
+        local_shadow1 = &opr_shadow[0];
+        local_shadow2 = &opr_shadow[1];
+    } else { /* use fp (shadow) registers */
+        tcg_gen_mov_tl(source1, cpu_fpr[rs1]);
+        tcg_gen_mov_tl(source2, cpu_fpr[rs2]);
+        /* use fp shadow reg */
+        local_shadow1 = &opr_shadow_fp[0];
+        local_shadow2 = &opr_shadow_fp[1];
+    }
     /* calc bits to neglect */
     switch (approxbits) {
     case 0x0:
@@ -203,12 +214,12 @@ static void gen_approx(DisasContext *ctx, uint32_t opc,
 
     /* overwrite lsb of the operands by the operand values of the last
        instruction */
-    tcg_gen_deposit_tl(source1, source1, opr_shadow[0], 0, lsb_negl);
-    tcg_gen_deposit_tl(source2, source2, opr_shadow[1], 0, lsb_negl);
+    tcg_gen_deposit_tl(source1, source1, *local_shadow1, 0, lsb_negl);
+    tcg_gen_deposit_tl(source2, source2, *local_shadow2, 0, lsb_negl);
 
     /* now shadow them again */
-    tcg_gen_mov_tl(opr_shadow[0], source1);
-    tcg_gen_mov_tl(opr_shadow[1], source2);
+    tcg_gen_mov_tl(*local_shadow1, source1);
+    tcg_gen_mov_tl(*local_shadow2, source2);
 
     /* do the actual calculation */
     switch (opc) {
@@ -221,7 +232,11 @@ static void gen_approx(DisasContext *ctx, uint32_t opc,
         kill_unknown(ctx, NEW_RISCV_EXCP_ILLEGAL_INST);
     }
     /* write back result */
-    gen_set_gpr(rd, source1);
+    if (opc < 3) { /* int regs */
+        gen_set_gpr(rd, source1);
+    } else { /* float regs */
+        tcg_gen_mov_tl(cpu_fpr[rd], source1);
+    }
     tcg_temp_free(source1);
     tcg_temp_free(source2);
 }
