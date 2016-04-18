@@ -35,7 +35,7 @@
 
 /* global register indices */
 static TCGv_ptr cpu_env;
-static TCGv cpu_gpr[32], cpu_PC, cpu_fpr[32], operand_shadow[2];
+static TCGv cpu_gpr[32], cpu_PC, cpu_fpr[32], opr_shadow[2];
 static TCGv load_reservation;
 
 #include "exec/gen-icount.h"
@@ -203,12 +203,12 @@ static void gen_approx(DisasContext *ctx, uint32_t opc,
 
     /* overwrite lsb of the operands by the operand values of the last
        instruction */
-    tcg_gen_deposit_tl(source1, source1, operand_shadow[0], 0, lsb_negl);
-    tcg_gen_deposit_tl(source2, source2, operand_shadow[1], 0, lsb_negl);
+    tcg_gen_deposit_tl(source1, source1, opr_shadow[0], 0, lsb_negl);
+    tcg_gen_deposit_tl(source2, source2, opr_shadow[1], 0, lsb_negl);
 
     /* now shadow them again */
-    tcg_gen_mov_tl(operand_shadow[0], source1);
-    tcg_gen_mov_tl(operand_shadow[1], source2);
+    tcg_gen_mov_tl(opr_shadow[0], source1);
+    tcg_gen_mov_tl(opr_shadow[1], source2);
 
     /* do the actual calculation */
     switch (opc) {
@@ -238,8 +238,8 @@ inline static void gen_arith(DisasContext *ctx, uint32_t opc,
     gen_get_gpr(source2, rs2);
 
     /* shadow the operands for ALU approx*/
-    gen_get_gpr(operand_shadow[0], rs1);
-    gen_get_gpr(operand_shadow[1], rs2);
+    gen_get_gpr(opr_shadow[0], rs1);
+    gen_get_gpr(opr_shadow[1], rs2);
 
     switch (opc) {
 
@@ -304,8 +304,8 @@ inline static void gen_arith(DisasContext *ctx, uint32_t opc,
             gen_get_gpr(spec_source2, rs2);
 
             /* shadow the operands for ALU approx*/
-            gen_get_gpr(operand_shadow[0], rs1);
-            gen_get_gpr(operand_shadow[1], rs2);
+            gen_get_gpr(opr_shadow[0], rs1);
+            gen_get_gpr(opr_shadow[1], rs2);
 
             tcg_gen_brcondi_tl(TCG_COND_EQ, spec_source2, 0x0, handle_zero);
 
@@ -346,8 +346,8 @@ inline static void gen_arith(DisasContext *ctx, uint32_t opc,
             gen_get_gpr(spec_source2, rs2);
 
             /* shadow the operands for ALU approx*/
-            gen_get_gpr(operand_shadow[0], rs1);
-            gen_get_gpr(operand_shadow[1], rs2);
+            gen_get_gpr(opr_shadow[0], rs1);
+            gen_get_gpr(opr_shadow[1], rs2);
 
             tcg_gen_brcondi_tl(TCG_COND_EQ, spec_source2, 0x0, handle_zero);
 
@@ -381,8 +381,8 @@ inline static void gen_arith(DisasContext *ctx, uint32_t opc,
             gen_get_gpr(spec_source2, rs2);
 
             /* shadow the operands for ALU approx*/
-            gen_get_gpr(operand_shadow[0], rs1);
-            gen_get_gpr(operand_shadow[1], rs2);
+            gen_get_gpr(opr_shadow[0], rs1);
+            gen_get_gpr(opr_shadow[1], rs2);
 
             tcg_gen_brcondi_tl(TCG_COND_EQ, spec_source2, 0x0, handle_zero);
 
@@ -423,8 +423,8 @@ inline static void gen_arith(DisasContext *ctx, uint32_t opc,
             gen_get_gpr(spec_source2, rs2);
 
             /* shadow the operands for ALU approx*/
-            gen_get_gpr(operand_shadow[0], rs1);
-            gen_get_gpr(operand_shadow[1], rs2);
+            gen_get_gpr(opr_shadow[0], rs1);
+            gen_get_gpr(opr_shadow[1], rs2);
 
             tcg_gen_brcondi_tl(TCG_COND_EQ, spec_source2, 0x0, handle_zero);
 
@@ -462,7 +462,7 @@ inline static void gen_arith_imm(DisasContext *ctx, uint32_t opc,
     source1 = tcg_temp_new();
     gen_get_gpr(source1, rs1);
     /* shadow the operands for ALU approx*/
-    gen_get_gpr(operand_shadow[0], rs1);
+    gen_get_gpr(opr_shadow[0], rs1);
 
     target_long uimm = (target_long)imm; /* sign ext 16->64 bits */
 
@@ -514,7 +514,7 @@ inline static void gen_arith_imm_w(DisasContext *ctx, uint32_t opc,
     source1 = tcg_temp_new();
     gen_get_gpr(source1, rs1);
     /* shadow the operands for ALU approx*/
-    gen_get_gpr(operand_shadow[0], rs1);
+    gen_get_gpr(opr_shadow[0], rs1);
 
     target_long uimm = (target_long)imm; /* sign ext 16->64 bits */
 
@@ -564,8 +564,8 @@ inline static void gen_arith_w(DisasContext *ctx, uint32_t opc,
     gen_get_gpr(source1, rs1);
     gen_get_gpr(source2, rs2);
     /* shadow the operands for ALU approx*/
-    gen_get_gpr(operand_shadow[0], rs1);
-    gen_get_gpr(operand_shadow[1], rs2);
+    gen_get_gpr(opr_shadow[0], rs1);
+    gen_get_gpr(opr_shadow[1], rs2);
 
     switch (opc) {
     case OPC_RISC_ADDW:
@@ -615,8 +615,8 @@ inline static void gen_arith_w(DisasContext *ctx, uint32_t opc,
             gen_get_gpr(spec_source1, rs1);
             gen_get_gpr(spec_source2, rs2);
             /* shadow the operands for ALU approx*/
-            gen_get_gpr(operand_shadow[0], rs1);
-            gen_get_gpr(operand_shadow[1], rs2);
+            gen_get_gpr(opr_shadow[0], rs1);
+            gen_get_gpr(opr_shadow[1], rs2);
 
             tcg_gen_ext32s_tl(spec_source1, spec_source1);
             tcg_gen_ext32s_tl(spec_source2, spec_source2);
@@ -661,8 +661,8 @@ inline static void gen_arith_w(DisasContext *ctx, uint32_t opc,
             gen_get_gpr(spec_source2, rs2);
 
             /* shadow the operands for ALU approx*/
-            gen_get_gpr(operand_shadow[0], rs1);
-            gen_get_gpr(operand_shadow[1], rs2);
+            gen_get_gpr(opr_shadow[0], rs1);
+            gen_get_gpr(opr_shadow[1], rs2);
 
             tcg_gen_ext32u_tl(spec_source1, spec_source1);
             tcg_gen_ext32u_tl(spec_source2, spec_source2);
@@ -700,8 +700,8 @@ inline static void gen_arith_w(DisasContext *ctx, uint32_t opc,
             gen_get_gpr(spec_source2, rs2);
 
             /* shadow the operands for ALU approx*/
-            gen_get_gpr(operand_shadow[0], rs1);
-            gen_get_gpr(operand_shadow[1], rs2);
+            gen_get_gpr(opr_shadow[0], rs1);
+            gen_get_gpr(opr_shadow[1], rs2);
 
             tcg_gen_ext32s_tl(spec_source1, spec_source1);
             tcg_gen_ext32s_tl(spec_source2, spec_source2);
@@ -746,8 +746,8 @@ inline static void gen_arith_w(DisasContext *ctx, uint32_t opc,
             gen_get_gpr(spec_source2, rs2);
 
             /* shadow the operands for ALU approx*/
-            gen_get_gpr(operand_shadow[0], rs1);
-            gen_get_gpr(operand_shadow[1], rs2);
+            gen_get_gpr(opr_shadow[0], rs1);
+            gen_get_gpr(opr_shadow[1], rs2);
 
             tcg_gen_ext32u_tl(spec_source1, spec_source1);
             tcg_gen_ext32u_tl(spec_source2, spec_source2);
@@ -788,8 +788,8 @@ inline static void gen_branch(DisasContext *ctx, uint32_t opc,
     gen_get_gpr(source1, rs1);
     gen_get_gpr(source2, rs2);
     /* shadow the operands for ALU approx*/
-    gen_get_gpr(operand_shadow[0], rs1);
-    gen_get_gpr(operand_shadow[1], rs2);
+    gen_get_gpr(opr_shadow[0], rs1);
+    gen_get_gpr(opr_shadow[1], rs2);
 
     target_ulong ubimm = (target_long)bimm; /* sign ext 16->64 bits */
 
@@ -846,7 +846,7 @@ inline static void gen_load(DisasContext *ctx, uint32_t opc,
 
     gen_get_gpr(t0, rs1);
     /* shadow the operands for ALU approx*/
-    gen_get_gpr(operand_shadow[0], rs1);
+    gen_get_gpr(opr_shadow[0], rs1);
 
     tcg_gen_addi_tl(t0, t0, uimm); //
 
@@ -894,8 +894,8 @@ inline static void gen_store(DisasContext *ctx, uint32_t opc,
     TCGv dat = tcg_temp_new();
     gen_get_gpr(t0, rs1);
     /* shadow the operands for ALU approx*/
-    gen_get_gpr(operand_shadow[0], rs1);
-    gen_get_gpr(operand_shadow[1], rs2);
+    gen_get_gpr(opr_shadow[0], rs1);
+    gen_get_gpr(opr_shadow[1], rs2);
 
     tcg_gen_addi_tl(t0, t0, uimm);
     gen_get_gpr(dat, rs2);
@@ -941,7 +941,7 @@ inline static void gen_jalr(DisasContext *ctx, uint32_t opc,
     case OPC_RISC_JALR: // CANNOT HAVE CHAINING WITH JALR
         gen_get_gpr(t0, rs1);
         /* shadow the operands for ALU approx*/
-        gen_get_gpr(operand_shadow[0], rs1);
+        gen_get_gpr(opr_shadow[0], rs1);
 
         tcg_gen_addi_tl(t0, t0, uimm);
         tcg_gen_andi_tl(t0, t0, 0xFFFFFFFFFFFFFFFEll);
@@ -989,8 +989,8 @@ inline static void gen_atomic(DisasContext *ctx, uint32_t opc,
     gen_get_gpr(source1, rs1);
     gen_get_gpr(source2, rs2);
     /* shadow the operands for ALU approx*/
-    gen_get_gpr(operand_shadow[0], rs1);
-    gen_get_gpr(operand_shadow[1], rs2);
+    gen_get_gpr(opr_shadow[0], rs1);
+    gen_get_gpr(opr_shadow[1], rs2);
 
     switch (opc) {
         // all currently implemented as non-atomics
@@ -1307,7 +1307,7 @@ inline static void gen_csr_htif(DisasContext *ctx, uint32_t opc, uint64_t addr, 
     htif_addr = tcg_temp_new();
     gen_get_gpr(source1, rs1); // load rs1 val
     /* shadow the operands for ALU approx*/
-    gen_get_gpr(operand_shadow[0], rs1);
+    gen_get_gpr(opr_shadow[0], rs1);
 
     tcg_gen_movi_tl(htif_addr, addr);
     tcg_gen_qemu_ld64(csr_store, htif_addr, ctx->mem_idx); // get htif "reg" val
@@ -1364,7 +1364,7 @@ inline static void gen_system(DisasContext *ctx, uint32_t opc,
     dest = tcg_temp_new();
     gen_get_gpr(source1, rs1);
     /* shadow the operands for ALU approx*/
-    gen_get_gpr(operand_shadow[0], rs1);
+    gen_get_gpr(opr_shadow[0], rs1);
 
     tcg_gen_movi_tl(csr_store, csr); // copy into temp reg to feed to helper
 
@@ -2242,9 +2242,9 @@ void riscv_tcg_init(void)
 
     cpu_PC = tcg_global_mem_new(TCG_AREG0,
                                 offsetof(CPURISCVState, active_tc.PC), "PC");
-    operand_shadow[0] = tcg_global_mem_new(TCG_AREG0,
+    opr_shadow[0] = tcg_global_mem_new(TCG_AREG0,
                                 offsetof(CPURISCVState, operand_shadow[0]), "shadow 0");
-    operand_shadow[1] = tcg_global_mem_new(TCG_AREG0,
+    opr_shadow[1] = tcg_global_mem_new(TCG_AREG0,
                                 offsetof(CPURISCVState, operand_shadow[1]), "shadow 1");
 
 
