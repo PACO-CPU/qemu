@@ -170,10 +170,13 @@ static void gen_approx(DisasContext *ctx, uint32_t opc,
 {
     TCGv source1, source2;
     TCGv *local_shadow1, *local_shadow2;
+    TCGv rm_reg;
     int lsb_negl;
 
     source1 = tcg_temp_new();
     source2 = tcg_temp_new();
+
+    rm_reg = tcg_const_i64(4);
 
     if (opc < 3) {/* opc of all int insn is 0,1 and 2 */
         gen_get_gpr(source1, rs1);
@@ -228,6 +231,43 @@ static void gen_approx(DisasContext *ctx, uint32_t opc,
         break;
     case OPC_PACO_SUB_APPROX:
         tcg_gen_sub_tl(source1, source1, source2);
+        break;
+    case OPC_PACO_MUL_APPROX:
+        tcg_gen_mul_tl(source1, source1, source2);
+        break;
+    /* NOTE: approx floating point insn don't have a field for the rounding
+             mode and thus will _always_ use rounding mode 4, which is
+             'Round Up' */
+    case OPC_PACO_FADD_S_APPROX:
+        gen_helper_fadd_s(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], cpu_fpr[rs2],
+                          rm_reg);
+        break;
+    case OPC_PACO_FSUB_S_APPROX:
+        gen_helper_fsub_s(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], cpu_fpr[rs2],
+                          rm_reg);
+        break;
+    case OPC_PACO_FMUL_S_APPROX:
+        gen_helper_fmul_s(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], cpu_fpr[rs2],
+                          rm_reg);
+        break;
+    case OPC_PACO_FSQRT_S_APPROX:
+        gen_helper_fsqrt_s(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], rm_reg);
+        break;
+    case OPC_PACO_FADD_D_APPROX:
+        gen_helper_fadd_d(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], cpu_fpr[rs2],
+                          rm_reg);
+        break;
+    case OPC_PACO_FSUB_D_APPROX:
+        gen_helper_fsub_d(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], cpu_fpr[rs2],
+                          rm_reg);
+        break;
+    case OPC_PACO_FMUL_D_APPROX:
+        gen_helper_fmul_d(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], cpu_fpr[rs2],
+                          rm_reg);
+        break;
+    case OPC_PACO_FSQRT_D_APPROX:
+        gen_helper_fsqrt_d(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], rm_reg);
+        break;
     default:
         kill_unknown(ctx, NEW_RISCV_EXCP_ILLEGAL_INST);
     }
@@ -239,6 +279,7 @@ static void gen_approx(DisasContext *ctx, uint32_t opc,
     }
     tcg_temp_free(source1);
     tcg_temp_free(source2);
+    tcg_temp_free(rm_reg);
 }
 
 inline static void gen_arith(DisasContext *ctx, uint32_t opc,
