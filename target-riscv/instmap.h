@@ -306,9 +306,17 @@ enum {
 
 #define MASK_OP_APPROX(op) (((op & 0x7000) >> 12) | ((op & 0x2000000) >> 25))
 enum {
-    OPC_PACO_ADD_APPROX = 0x0,
-    OPC_PACO_SUB_APPROX = 0x1,
-    OPC_PACO_MUL_APPROX = 0x2,
+    OPC_PACO_ADD_APPROX     = 0x0,
+    OPC_PACO_SUB_APPROX     = 0x1,
+    OPC_PACO_MUL_APPROX     = 0x2,
+    OPC_PACO_FADD_S_APPROX  = 0x4,
+    OPC_PACO_FSUB_S_APPROX  = 0x5,
+    OPC_PACO_FMUL_S_APPROX  = 0x6,
+    OPC_PACO_FSQRT_S_APPROX = 0xc,
+    OPC_PACO_FADD_D_APPROX  = 0x8,
+    OPC_PACO_FSUB_D_APPROX  = 0x9,
+    OPC_PACO_FMUL_D_APPROX  = 0xa,
+    OPC_PACO_FSQRT_D_APPROX = 0xd,
 };
 
 #define GET_B_IMM(inst)              ((int16_t)((((inst >> 25) & 0x3F) << 5) | ((((int32_t)inst) >> 31) << 12) | (((inst >> 8) & 0xF) << 1) | (((inst >> 7) & 0x1) << 11)))  /* THIS BUILDS 13 bit imm (implicit zero is tacked on here), also note that bit #12 is obtained in a special way to get sign extension */
