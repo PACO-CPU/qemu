@@ -35,7 +35,7 @@
 
 /* global register indices */
 static TCGv_ptr cpu_env;
-static TCGv cpu_gpr[32], cpu_PC, cpu_fpr[32], opr_shadow[2];
+static TCGv cpu_gpr[32], cpu_PC, cpu_fpr[32], opr_shadow[2], opr_shadow_fp[2];
 static TCGv load_reservation;
 
 #include "exec/gen-icount.h"
@@ -2246,6 +2246,10 @@ void riscv_tcg_init(void)
                                 offsetof(CPURISCVState, operand_shadow[0]), "shadow 0");
     opr_shadow[1] = tcg_global_mem_new(TCG_AREG0,
                                 offsetof(CPURISCVState, operand_shadow[1]), "shadow 1");
+    opr_shadow_fp[0] = tcg_global_mem_new(TCG_AREG0,
+                                  offsetof(CPURISCVState, operand_shadow_fp[0]), "shadowfp 0");
+    opr_shadow_fp[1] = tcg_global_mem_new(TCG_AREG0,
+                                  offsetof(CPURISCVState, operand_shadow_fp[1]), "shadowfp 1");
 
 
     // TODO: not initialized
