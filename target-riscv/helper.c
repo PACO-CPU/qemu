@@ -79,7 +79,7 @@ static int get_physical_address (CPURISCVState *env, hwaddr *physical,
     }
 
     if (mode == PRV_M) {
-        target_ulong msb_mask = (2L << 63) - 1;
+        target_ulong msb_mask = (2UL << 63) - 1;
         *physical = address & msb_mask;
         *prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
         return TRANSLATE_SUCCESS;
@@ -248,7 +248,7 @@ int riscv_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw, int mmu_idx)
     return ret;
 }
 
-static const char * const riscv_excp_names[12] = {
+/*static const char * const riscv_excp_names[12] = {
     "Instruction Address Misaligned",
     "Instruction Access Fault",
     "Illegal Instruction",
@@ -261,13 +261,7 @@ static const char * const riscv_excp_names[12] = {
     "Supervisor ECALL",
     "Hypervisor ECALL",
     "Machine ECALL",
-};
-
-static const char * const riscv_interrupt_names[3] = {
-    "Soft interrupt",
-    "Timer interrupt",
-    "Host interrupt"
-};
+};*/
 
 target_ulong push_priv_stack(target_ulong start_mstatus) {
     target_ulong s = start_mstatus;

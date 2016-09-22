@@ -35,7 +35,7 @@
 
 /* global register indices */
 static TCGv_ptr cpu_env;
-static TCGv cpu_gpr[32], cpu_PC, cpu_fpr[32], opr_shadow[2], opr_shadow_fp[2];
+static TCGv cpu_gpr[32], cpu_fpr[32], cpu_PC;
 static TCGv load_reservation;
 
 #include "exec/gen-icount.h"
@@ -169,60 +169,45 @@ static void gen_approx(DisasContext *ctx, uint32_t opc,
                        int rd, int rs1, int rs2, uint16_t approxbits)
 {
     TCGv source1, source2;
-    TCGv *local_shadow1, *local_shadow2;
-    TCGv rm_reg;
+    TCGv tzero;
     int lsb_negl;
 
     source1 = tcg_temp_new();
     source2 = tcg_temp_new();
+    tzero = tcg_const_i64(0);
 
-    rm_reg = tcg_const_i64(4);
+    gen_get_gpr(source1, rs1);
+    gen_get_gpr(source2, rs2);
 
-    if (opc < 3) {/* opc of all int insn is 0,1 and 2 */
-        gen_get_gpr(source1, rs1);
-        gen_get_gpr(source2, rs2);
-        /* use int shadow reg */
-        local_shadow1 = &opr_shadow[0];
-        local_shadow2 = &opr_shadow[1];
-    } else { /* use fp (shadow) registers */
-        tcg_gen_mov_tl(source1, cpu_fpr[rs1]);
-        tcg_gen_mov_tl(source2, cpu_fpr[rs2]);
-        /* use fp shadow reg */
-        local_shadow1 = &opr_shadow_fp[0];
-        local_shadow2 = &opr_shadow_fp[1];
-    }
     /* calc bits to neglect */
     switch (approxbits) {
-    case 0x0:
+    case 63:
         lsb_negl = 2;
         break;
-    case 0x20:
+    case 62:
         lsb_negl = 4;
         break;
-    case 0x30:
+    case 60:
         lsb_negl = 7;
-    case 0x38:
+        break;
+    case 56:
         lsb_negl = 10;
         break;
-    case 0x3c:
+    case 48:
         lsb_negl = 15;
         break;
-    case 0x3e:
+    case 32:
         lsb_negl = 20;
         break;
-    case 0x3f:
-        lsb_negl = 27;
+    case 0:
+        lsb_negl = 26;
         break;
     }
 
     /* overwrite lsb of the operands by the operand values of the last
        instruction */
-    tcg_gen_deposit_tl(source1, source1, *local_shadow1, 0, lsb_negl);
-    tcg_gen_deposit_tl(source2, source2, *local_shadow2, 0, lsb_negl);
-
-    /* now shadow them again */
-    tcg_gen_mov_tl(*local_shadow1, source1);
-    tcg_gen_mov_tl(*local_shadow2, source2);
+    tcg_gen_deposit_tl(source1, source1, tzero, 0, lsb_negl);
+    tcg_gen_deposit_tl(source2, source2, tzero, 0, lsb_negl);
 
     /* do the actual calculation */
     switch (opc) {
@@ -235,51 +220,13 @@ static void gen_approx(DisasContext *ctx, uint32_t opc,
     case OPC_PACO_MUL_APPROX:
         tcg_gen_mul_tl(source1, source1, source2);
         break;
-    /* NOTE: approx floating point insn don't have a field for the rounding
-             mode and thus will _always_ use rounding mode 4, which is
-             'Round Up' */
-    case OPC_PACO_FADD_S_APPROX:
-        gen_helper_fadd_s(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], cpu_fpr[rs2],
-                          rm_reg);
-        break;
-    case OPC_PACO_FSUB_S_APPROX:
-        gen_helper_fsub_s(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], cpu_fpr[rs2],
-                          rm_reg);
-        break;
-    case OPC_PACO_FMUL_S_APPROX:
-        gen_helper_fmul_s(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], cpu_fpr[rs2],
-                          rm_reg);
-        break;
-    case OPC_PACO_FSQRT_S_APPROX:
-        gen_helper_fsqrt_s(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], rm_reg);
-        break;
-    case OPC_PACO_FADD_D_APPROX:
-        gen_helper_fadd_d(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], cpu_fpr[rs2],
-                          rm_reg);
-        break;
-    case OPC_PACO_FSUB_D_APPROX:
-        gen_helper_fsub_d(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], cpu_fpr[rs2],
-                          rm_reg);
-        break;
-    case OPC_PACO_FMUL_D_APPROX:
-        gen_helper_fmul_d(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], cpu_fpr[rs2],
-                          rm_reg);
-        break;
-    case OPC_PACO_FSQRT_D_APPROX:
-        gen_helper_fsqrt_d(cpu_fpr[rd], cpu_env, cpu_fpr[rs1], rm_reg);
-        break;
     default:
         kill_unknown(ctx, NEW_RISCV_EXCP_ILLEGAL_INST);
     }
     /* write back result */
-    if (opc < 3) { /* int regs */
-        gen_set_gpr(rd, source1);
-    } else { /* float regs */
-        tcg_gen_mov_tl(cpu_fpr[rd], source1);
-    }
+    gen_set_gpr(rd, source1);
     tcg_temp_free(source1);
     tcg_temp_free(source2);
-    tcg_temp_free(rm_reg);
 }
 
 inline static void gen_arith(DisasContext *ctx, uint32_t opc,
@@ -292,10 +239,6 @@ inline static void gen_arith(DisasContext *ctx, uint32_t opc,
 
     gen_get_gpr(source1, rs1);
     gen_get_gpr(source2, rs2);
-
-    /* shadow the operands for ALU approx*/
-    gen_get_gpr(opr_shadow[0], rs1);
-    gen_get_gpr(opr_shadow[1], rs2);
 
     switch (opc) {
 
@@ -359,10 +302,6 @@ inline static void gen_arith(DisasContext *ctx, uint32_t opc,
             gen_get_gpr(spec_source1, rs1);
             gen_get_gpr(spec_source2, rs2);
 
-            /* shadow the operands for ALU approx*/
-            gen_get_gpr(opr_shadow[0], rs1);
-            gen_get_gpr(opr_shadow[1], rs2);
-
             tcg_gen_brcondi_tl(TCG_COND_EQ, spec_source2, 0x0, handle_zero);
 
             // now, use temp reg to check if both overflow conditions satisfied
@@ -401,10 +340,6 @@ inline static void gen_arith(DisasContext *ctx, uint32_t opc,
             gen_get_gpr(spec_source1, rs1);
             gen_get_gpr(spec_source2, rs2);
 
-            /* shadow the operands for ALU approx*/
-            gen_get_gpr(opr_shadow[0], rs1);
-            gen_get_gpr(opr_shadow[1], rs2);
-
             tcg_gen_brcondi_tl(TCG_COND_EQ, spec_source2, 0x0, handle_zero);
 
             // normal case
@@ -435,10 +370,6 @@ inline static void gen_arith(DisasContext *ctx, uint32_t opc,
 
             gen_get_gpr(spec_source1, rs1);
             gen_get_gpr(spec_source2, rs2);
-
-            /* shadow the operands for ALU approx*/
-            gen_get_gpr(opr_shadow[0], rs1);
-            gen_get_gpr(opr_shadow[1], rs2);
 
             tcg_gen_brcondi_tl(TCG_COND_EQ, spec_source2, 0x0, handle_zero);
 
@@ -478,10 +409,6 @@ inline static void gen_arith(DisasContext *ctx, uint32_t opc,
             gen_get_gpr(spec_source1, rs1);
             gen_get_gpr(spec_source2, rs2);
 
-            /* shadow the operands for ALU approx*/
-            gen_get_gpr(opr_shadow[0], rs1);
-            gen_get_gpr(opr_shadow[1], rs2);
-
             tcg_gen_brcondi_tl(TCG_COND_EQ, spec_source2, 0x0, handle_zero);
 
             // normal case
@@ -517,8 +444,6 @@ inline static void gen_arith_imm(DisasContext *ctx, uint32_t opc,
     TCGv source1;
     source1 = tcg_temp_new();
     gen_get_gpr(source1, rs1);
-    /* shadow the operands for ALU approx*/
-    gen_get_gpr(opr_shadow[0], rs1);
 
     target_long uimm = (target_long)imm; /* sign ext 16->64 bits */
 
@@ -569,8 +494,6 @@ inline static void gen_arith_imm_w(DisasContext *ctx, uint32_t opc,
     TCGv source1;
     source1 = tcg_temp_new();
     gen_get_gpr(source1, rs1);
-    /* shadow the operands for ALU approx*/
-    gen_get_gpr(opr_shadow[0], rs1);
 
     target_long uimm = (target_long)imm; /* sign ext 16->64 bits */
 
@@ -619,9 +542,6 @@ inline static void gen_arith_w(DisasContext *ctx, uint32_t opc,
     source2 = tcg_temp_new();
     gen_get_gpr(source1, rs1);
     gen_get_gpr(source2, rs2);
-    /* shadow the operands for ALU approx*/
-    gen_get_gpr(opr_shadow[0], rs1);
-    gen_get_gpr(opr_shadow[1], rs2);
 
     switch (opc) {
     case OPC_RISC_ADDW:
@@ -670,9 +590,6 @@ inline static void gen_arith_w(DisasContext *ctx, uint32_t opc,
 
             gen_get_gpr(spec_source1, rs1);
             gen_get_gpr(spec_source2, rs2);
-            /* shadow the operands for ALU approx*/
-            gen_get_gpr(opr_shadow[0], rs1);
-            gen_get_gpr(opr_shadow[1], rs2);
 
             tcg_gen_ext32s_tl(spec_source1, spec_source1);
             tcg_gen_ext32s_tl(spec_source2, spec_source2);
@@ -716,10 +633,6 @@ inline static void gen_arith_w(DisasContext *ctx, uint32_t opc,
             gen_get_gpr(spec_source1, rs1);
             gen_get_gpr(spec_source2, rs2);
 
-            /* shadow the operands for ALU approx*/
-            gen_get_gpr(opr_shadow[0], rs1);
-            gen_get_gpr(opr_shadow[1], rs2);
-
             tcg_gen_ext32u_tl(spec_source1, spec_source1);
             tcg_gen_ext32u_tl(spec_source2, spec_source2);
 
@@ -754,10 +667,6 @@ inline static void gen_arith_w(DisasContext *ctx, uint32_t opc,
 
             gen_get_gpr(spec_source1, rs1);
             gen_get_gpr(spec_source2, rs2);
-
-            /* shadow the operands for ALU approx*/
-            gen_get_gpr(opr_shadow[0], rs1);
-            gen_get_gpr(opr_shadow[1], rs2);
 
             tcg_gen_ext32s_tl(spec_source1, spec_source1);
             tcg_gen_ext32s_tl(spec_source2, spec_source2);
@@ -801,10 +710,6 @@ inline static void gen_arith_w(DisasContext *ctx, uint32_t opc,
             gen_get_gpr(spec_source1, rs1);
             gen_get_gpr(spec_source2, rs2);
 
-            /* shadow the operands for ALU approx*/
-            gen_get_gpr(opr_shadow[0], rs1);
-            gen_get_gpr(opr_shadow[1], rs2);
-
             tcg_gen_ext32u_tl(spec_source1, spec_source1);
             tcg_gen_ext32u_tl(spec_source2, spec_source2);
 
@@ -843,9 +748,6 @@ inline static void gen_branch(DisasContext *ctx, uint32_t opc,
     source2 = tcg_temp_new();
     gen_get_gpr(source1, rs1);
     gen_get_gpr(source2, rs2);
-    /* shadow the operands for ALU approx*/
-    gen_get_gpr(opr_shadow[0], rs1);
-    gen_get_gpr(opr_shadow[1], rs2);
 
     target_ulong ubimm = (target_long)bimm; /* sign ext 16->64 bits */
 
@@ -901,8 +803,6 @@ inline static void gen_load(DisasContext *ctx, uint32_t opc,
     TCGv t1 = tcg_temp_new();
 
     gen_get_gpr(t0, rs1);
-    /* shadow the operands for ALU approx*/
-    gen_get_gpr(opr_shadow[0], rs1);
 
     tcg_gen_addi_tl(t0, t0, uimm); //
 
@@ -949,9 +849,6 @@ inline static void gen_store(DisasContext *ctx, uint32_t opc,
     TCGv t0 = tcg_temp_new();
     TCGv dat = tcg_temp_new();
     gen_get_gpr(t0, rs1);
-    /* shadow the operands for ALU approx*/
-    gen_get_gpr(opr_shadow[0], rs1);
-    gen_get_gpr(opr_shadow[1], rs2);
 
     tcg_gen_addi_tl(t0, t0, uimm);
     gen_get_gpr(dat, rs2);
@@ -996,8 +893,6 @@ inline static void gen_jalr(DisasContext *ctx, uint32_t opc,
 
     case OPC_RISC_JALR: // CANNOT HAVE CHAINING WITH JALR
         gen_get_gpr(t0, rs1);
-        /* shadow the operands for ALU approx*/
-        gen_get_gpr(opr_shadow[0], rs1);
 
         tcg_gen_addi_tl(t0, t0, uimm);
         tcg_gen_andi_tl(t0, t0, 0xFFFFFFFFFFFFFFFEll);
@@ -1044,9 +939,6 @@ inline static void gen_atomic(DisasContext *ctx, uint32_t opc,
 
     gen_get_gpr(source1, rs1);
     gen_get_gpr(source2, rs2);
-    /* shadow the operands for ALU approx*/
-    gen_get_gpr(opr_shadow[0], rs1);
-    gen_get_gpr(opr_shadow[1], rs2);
 
     switch (opc) {
         // all currently implemented as non-atomics
@@ -1362,8 +1254,6 @@ inline static void gen_csr_htif(DisasContext *ctx, uint32_t opc, uint64_t addr, 
     csr_store = tcg_temp_new();
     htif_addr = tcg_temp_new();
     gen_get_gpr(source1, rs1); // load rs1 val
-    /* shadow the operands for ALU approx*/
-    gen_get_gpr(opr_shadow[0], rs1);
 
     tcg_gen_movi_tl(htif_addr, addr);
     tcg_gen_qemu_ld64(csr_store, htif_addr, ctx->mem_idx); // get htif "reg" val
@@ -1419,8 +1309,6 @@ inline static void gen_system(DisasContext *ctx, uint32_t opc,
     csr_store = tcg_temp_new();
     dest = tcg_temp_new();
     gen_get_gpr(source1, rs1);
-    /* shadow the operands for ALU approx*/
-    gen_get_gpr(opr_shadow[0], rs1);
 
     tcg_gen_movi_tl(csr_store, csr); // copy into temp reg to feed to helper
 
@@ -2298,14 +2186,6 @@ void riscv_tcg_init(void)
 
     cpu_PC = tcg_global_mem_new(TCG_AREG0,
                                 offsetof(CPURISCVState, active_tc.PC), "PC");
-    opr_shadow[0] = tcg_global_mem_new(TCG_AREG0,
-                                offsetof(CPURISCVState, operand_shadow[0]), "shadow 0");
-    opr_shadow[1] = tcg_global_mem_new(TCG_AREG0,
-                                offsetof(CPURISCVState, operand_shadow[1]), "shadow 1");
-    opr_shadow_fp[0] = tcg_global_mem_new(TCG_AREG0,
-                                  offsetof(CPURISCVState, operand_shadow_fp[0]), "shadowfp 0");
-    opr_shadow_fp[1] = tcg_global_mem_new(TCG_AREG0,
-                                  offsetof(CPURISCVState, operand_shadow_fp[1]), "shadowfp 1");
 
 
     // TODO: not initialized
